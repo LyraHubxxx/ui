@@ -1,16 +1,9 @@
 --[[
-    Lyra Main Features
-    - No UI library is embedded in this file.
-    - Put the loadstring for Lyra UI purple black.txt in UI_LOADSTRING below.
-]]
-
-local UI_LOADSTRING = [==[
--- paste the loadstring source for Lyra UI purple black.txt here
-]==]
-local Library = loadstring(UI_LOADSTRING)()
---[[
-    Blade Ball Script with Lyra UI (Fully Merged & Restored)
-    Includes: Autoparry (HSH-2 Bypass), Spam, AI Play, Walkable Immortal, Skin Changer, Emotes
+    Blade Ball Standalone/Headless Script (UI Removed)
+    Includes: Autoparry, Spam, AI Play, Walkable Immortal, Skin Changer, Emotes,
+    Target Player, Brutal Avatar Changer, Curve Math, Rain, Plasma Trails.
+    
+    INSTRUCTIONS: Change values in the "Configuration" table below to toggle features.
 ]]
 
 if _G.Sigma then 
@@ -18,10 +11,90 @@ if _G.Sigma then
 end
 _G.Sigma = true
 
-local VERSION = "3.7"
+-- ============================================================================
+-- ⚙️ CONFIGURATION (EDIT THIS TO TOGGLE FEATURES)
+-- ============================================================================
+local Config = {
+    Autoparry = {
+        Enabled = true,              -- Set to true to enable Autoparry
+        Method = "KeyPress (F)",     -- "KeyPress (F)" or "MouseClick"
+        Triggerbot = false,          -- Auto-parry targeted balls early
+        Accuracy = 1,                -- Autoparry accuracy (1 - 10)
+    },
+    Spam = {
+        ManualSpam = false,          -- Enable manual spam logic
+        ManualMethod = "KeyPress (F)",
+        AutoSpam = false,            -- Enable auto spam logic
+        Rate = 240                   -- Spam rate clicks/sec
+    },
+    Detections = {
+        Infinity = true,             -- Bypass Infinity Ball
+        Deathslash = true,           -- Bypass Deathslash
+        Timehole = true,             -- Bypass Timehole
+        SlashesOfFury = true,        -- Bypass Slashes of Fury
+        Phantom = true               -- Bypass Phantom Ball
+    },
+    Visuals = {
+        ESP = false,                 -- Player ESP
+        ESPColor = Color3.fromRGB(135, 80, 255),
+        TeamCheck = false,
+        NightMode = false,
+        DisableCamShake = false,
+        Rain = false,                -- Custom Rain Visuals
+        RainColor = Color3.fromRGB(100, 200, 255),
+        Plasma = false,              -- Custom Plasma Trail Visuals
+        PlasmaColor = Color3.fromRGB(0, 255, 255)
+    },
+    PlayerMods = {
+        WalkSpeed = { Enabled = false, Value = 16 },
+        JumpPower = { Enabled = false, Value = 50 },
+        FOV = { Enabled = false, Value = 70 },
+        Spinbot = { Enabled = false, Speed = 50 }
+    },
+    Misc = {
+        AIPlay = false,              -- Auto-play AI bot
+        AIJumping = true,
+        AIJumpChance = 50,
+        AIUpdateFrequency = 6,
+        DisableEffects = false
+    },
+    Exclusive = {
+        Immortal = false,            -- Walkable Semi-Immortal Bypass
+        ImmortalRadius = 25,
+        ImmortalHeight = 30,
+        Emotes = false,              -- Built-in Emotes
+        AutoStopEmote = true,        -- Stop emote when moving
+        SelectedEmote = "None",      -- Emote Name
+        
+        SkinChanger = false,         -- Local Skin Changer
+        SwordModelName = "",         -- Name of the sword model
+        SwordAnimName = "",          -- Name of the sword animation
+        SwordFXName = "",            -- Name of the sword FX
+        
+        TargetPlayerName = "",       -- Player Name to lock onto for targeting
+        AvatarChangerName = ""       -- Player Name whose avatar you want to copy locally
+    },
+    Curve = {
+        Mode = 1 -- 1: Camera, 2: Random, 3: Accelerated, 4: Backwards, 5: Slow, 6: High
+    }
+}
+
+-- Apply global configurations expected by the system
+getgenv().AutoParryMode = Config.Autoparry.Method
+getgenv().ManualSpamMode = Config.Spam.ManualMethod
+getgenv().AutoStopEmote = Config.Exclusive.AutoStopEmote
+
+getgenv().skinChangerEnabled = Config.Exclusive.SkinChanger
+getgenv().changeSwordModel = Config.Exclusive.SkinChanger
+getgenv().swordModel = Config.Exclusive.SwordModelName
+getgenv().changeSwordAnimation = Config.Exclusive.SkinChanger
+getgenv().swordAnimations = Config.Exclusive.SwordAnimName
+getgenv().changeSwordFX = Config.Exclusive.SkinChanger
+getgenv().swordFX = Config.Exclusive.SwordFXName
+
 
 -- ============================================================================
--- CORE SERVICES
+-- CORE SERVICES & VARIABLES
 -- ============================================================================
 local Players           = cloneref and cloneref(game:GetService('Players')) or game:GetService('Players')
 local ReplicatedStorage = cloneref and cloneref(game:GetService('ReplicatedStorage')) or game:GetService('ReplicatedStorage')
@@ -30,9 +103,8 @@ local RunService        = cloneref and cloneref(game:GetService('RunService')) o
 local TweenService      = cloneref and cloneref(game:GetService('TweenService')) or game:GetService('TweenService')
 local Stats             = cloneref and cloneref(game:GetService('Stats')) or game:GetService('Stats')
 local Debris            = cloneref and cloneref(game:GetService('Debris')) or game:GetService('Debris')
-local CoreGui           = cloneref and cloneref(game:GetService('CoreGui')) or game:GetService('CoreGui')
-local HttpService       = cloneref and cloneref(game:GetService('HttpService')) or game:GetService('HttpService')
 local Workspace         = cloneref and cloneref(game:GetService('Workspace')) or game:GetService('Workspace')
+local HttpService       = cloneref and cloneref(game:GetService('HttpService')) or game:GetService('HttpService')
 local VIM               = cloneref and cloneref(game:GetService("VirtualInputManager")) or game:GetService("VirtualInputManager")
 
 local LocalPlayer = Players.LocalPlayer
@@ -45,18 +117,18 @@ end
 local Alive = workspace:FindFirstChild("Alive") or workspace:WaitForChild("Alive")
 local Runtime = workspace:FindFirstChild("Runtime") or workspace:WaitForChild("Runtime")
 
--- ============================================================================
 
+-- ============================================================================
 -- SYSTEM BASE LOGIC & PROPERTIES
 -- ============================================================================
 local System = {
     __properties = {
-        __autoparry_enabled = false,
-        __triggerbot_enabled = false,
-        __manual_spam_enabled = false,
-        __auto_spam_enabled = false,
+        __autoparry_enabled = Config.Autoparry.Enabled,
+        __triggerbot_enabled = Config.Autoparry.Triggerbot,
+        __manual_spam_enabled = Config.Spam.ManualSpam,
+        __auto_spam_enabled = Config.Spam.AutoSpam,
         __play_animation = false,
-        __accuracy = 1,
+        __accuracy = Config.Autoparry.Accuracy,
         __divisor_multiplier = 1.1,
         __parried = false,
         __training_parried = false,
@@ -66,28 +138,26 @@ local System = {
         __tornado_time = tick(),
         __connections = {},
         __spam_accumulator = 0,
-        __spam_rate = 240,
+        __spam_rate = Config.Spam.Rate,
         __infinity_active = false,
         __deathslash_active = false,
         __timehole_active = false,
         __slashesoffury_active = false,
         __slashesoffury_count = 0,
-        __is_mobile = UserInputService.TouchEnabled and not UserInputService.MouseEnabled,
-        __mobile_guis = {}
     },
     
     __config = {
         __detections = {
-            __infinity = false,
-            __deathslash = false,
-            __timehole = false,
-            __slashesoffury = false,
-            __phantom = false
+            __infinity = Config.Detections.Infinity,
+            __deathslash = Config.Detections.Deathslash,
+            __timehole = Config.Detections.Timehole,
+            __slashesoffury = Config.Detections.SlashesOfFury,
+            __phantom = Config.Detections.Phantom
         }
     },
     
     __triggerbot = {
-        __enabled = false,
+        __enabled = Config.Autoparry.Triggerbot,
         __is_parrying = false,
         __parries = 0,
         __max_parries = 10000,
@@ -118,6 +188,7 @@ end
 local function update_divisor()
     System.__properties.__divisor_multiplier = 0.75 + (System.__properties.__accuracy - 1) * (3 / 99)
 end
+update_divisor()
 
 -- ============================================================================
 -- CORE SYSTEM MECHANICS (ANIMATION, BALL, PLAYER, PARRY)
@@ -218,16 +289,12 @@ System.parry = {}
 function System.parry.execute()
     if System.__properties.__parries > 10000 or not LocalPlayer.Character then return end
     
-    -- [[ 100% RAW NATIVE PARRY EXECUTION - BYPASSES ALL ANTI-CHEAT HOOK DETECTIONS ]]
-    -- We completely removed the metatable index interception hook which was triggering anti-cheat kicks.
-    -- The parry methods are now natively emulated without tampering with any core Roblox environment APIs.
-    -- Modes: "KeyPress (F)" and "MouseClick" (Unsafe Connection & Direct Call modes have been removed to prevent kicks/failures).
     local method = getgenv().AutoParryMode or "KeyPress (F)"
     
     if method == "KeyPress (F)" then
         pcall(function()
             if keypress and keyrelease then
-                keypress(0x46) -- F Key Code
+                keypress(0x46)
                 task.wait()
                 keyrelease(0x46)
             else
@@ -254,10 +321,6 @@ function System.parry.execute()
             if System.__properties.__parries > 0 then System.__properties.__parries = System.__properties.__parries - 1 end
         end)
     end
-end
-
-function System.parry.keypress()
-    System.parry.execute()
 end
 
 function System.parry.execute_action()
@@ -617,6 +680,7 @@ function System.autoparry.stop()
     if System.__properties.__connections.__autoparry then System.__properties.__connections.__autoparry:Disconnect(); System.__properties.__connections.__autoparry = nil end
 end
 
+
 -- ============================================================================
 -- SYSTEM: EMOTES (ANIMATION SYSTEM)
 -- ============================================================================
@@ -636,16 +700,6 @@ function animation_system.load_animations()
             end
         end
     end)
-end
-
-function animation_system.get_emotes_list()
-    local emotes_list = {}
-    for emote_name in pairs(animation_system.storage) do
-        table.insert(emotes_list, emote_name)
-    end
-    table.sort(emotes_list)
-    if #emotes_list == 0 then table.insert(emotes_list, "None") end
-    return emotes_list
 end
 
 function animation_system.play(emote_name)
@@ -705,8 +759,6 @@ function animation_system.cleanup()
     end
 end
 
-animation_system.load_animations()
-local emotes_data = animation_system.get_emotes_list()
 
 -- ============================================================================
 -- SYSTEM: WALKABLE SEMI-IMMORTAL (DESYNC)
@@ -716,7 +768,7 @@ local immortalState = { enabled = false, notify = false, heartbeatConnection = n
 local immortalDesyncData = { originalCFrame = nil, originalVelocity = nil }
 local immortalCache = { character = nil, hrp = nil, head = nil, headOffset = Vector3.new(0, 0, 0), aliveFolder = nil }
 local immortalHooks = { oldIndex = nil }
-local immortalConstants = { emptyCFrame = CFrame.new(), radius = 25, baseHeight = 5, riseHeight = 30, cycleSpeed = 11.9, velocity = Vector3.new(1, 1, 1) }
+local immortalConstants = { emptyCFrame = CFrame.new(), radius = Config.Exclusive.ImmortalRadius, baseHeight = 5, riseHeight = Config.Exclusive.ImmortalHeight, cycleSpeed = 11.9, velocity = Vector3.new(1, 1, 1) }
 
 local function immortalUpdateCache()
     local character = LocalPlayer.Character
@@ -727,7 +779,6 @@ local function immortalUpdateCache()
         return
     end
     
-    -- Fix: Re-check if the character changed OR if we are missing the root parts from loading too fast
     if character ~= immortalCache.character or not immortalCache.hrp or not immortalCache.head then
         immortalCache.character = character
         immortalCache.hrp = character:FindFirstChild("HumanoidRootPart")
@@ -740,7 +791,6 @@ local function immortalUpdateCache()
 end
 
 local function immortalIsInAliveFolder()
-    -- Fix: Dynamically fetch the Alive folder in case the map reloads it
     local aliveFolder = workspace:FindFirstChild("Alive")
     return aliveFolder and immortalCache.character and immortalCache.character.Parent == aliveFolder
 end
@@ -792,9 +842,6 @@ function WalkableSemiImmortal.toggle(enabled)
     end
 end
 
-function WalkableSemiImmortal.setRadius(value) immortalConstants.radius = value end
-function WalkableSemiImmortal.setHeight(value) immortalConstants.riseHeight = value end
-
 LocalPlayer.CharacterRemoving:Connect(function()
     immortalCache.character = nil
     immortalCache.hrp = nil
@@ -817,6 +864,7 @@ immortalHooks.oldIndex = hookmetamethod(game, "__index", newcclosure(function(se
     
     return immortalHooks.oldIndex(self, key)
 end))
+
 
 -- ============================================================================
 -- SYSTEM: SKIN CHANGER 
@@ -928,7 +976,14 @@ end)
 -- SYSTEM: AI AUTO-PLAY 
 -- ============================================================================
 local AutoPlayModule = {}
-AutoPlayModule.CONFIG = { DEFAULT_DISTANCE = 30, MULTIPLIER_THRESHOLD = 70, TRAVERSING = 25, DIRECTION = 1, JUMP_PERCENTAGE = 50, DOUBLE_JUMP_PERCENTAGE = 50, JUMPING_ENABLED = false, MOVEMENT_DURATION = 0.8, OFFSET_FACTOR = 0.7, GENERATION_THRESHOLD = 0.25, PLAYER_DISTANCE_ENABLED = false, MINIMUM_PLAYER_DISTANCE = 15, UPDATE_FREQUENCY = 6, POSITION_UPDATE_RATE = 0.1, BALL_CHECK_RATE = 0.2, PLAYER_CHECK_RATE = 0.5 }
+AutoPlayModule.CONFIG = { 
+    DEFAULT_DISTANCE = 30, MULTIPLIER_THRESHOLD = 70, TRAVERSING = 25, DIRECTION = 1, 
+    JUMP_PERCENTAGE = Config.Misc.AIJumpChance, DOUBLE_JUMP_PERCENTAGE = Config.Misc.AIJumpChance, 
+    JUMPING_ENABLED = Config.Misc.AIJumping, MOVEMENT_DURATION = 0.8, OFFSET_FACTOR = 0.7, 
+    GENERATION_THRESHOLD = 0.25, PLAYER_DISTANCE_ENABLED = false, MINIMUM_PLAYER_DISTANCE = 15, 
+    UPDATE_FREQUENCY = Config.Misc.AIUpdateFrequency, POSITION_UPDATE_RATE = 0.1, 
+    BALL_CHECK_RATE = 0.2, PLAYER_CHECK_RATE = 0.5 
+}
 AutoPlayModule.ball = nil
 AutoPlayModule.lobbyChoice = nil
 AutoPlayModule.animationCache = nil
@@ -1340,12 +1395,14 @@ AutoPlayModule.runThread = function()
     AutoPlayModule.signal.connect("synchronize", AutoPlayModule.customService.RunService.PostSimulation, AutoPlayModule.ballUtils.getBall)
 end
 
+
 -- ============================================================================
 -- VISUALS, ESP, PLAYER MODS
 -- ============================================================================
 System.visuals = {
-    __esp_enabled = false, __esp_team_check = false, __esp_color = Color3.fromRGB(135, 80, 255), __esp_highlight_cache = {},
-    __night_mode = false, __night_color = Color3.fromRGB(10, 10, 15),
+    __esp_enabled = Config.Visuals.ESP, __esp_team_check = Config.Visuals.TeamCheck, 
+    __esp_color = Config.Visuals.ESPColor, __esp_highlight_cache = {},
+    __night_mode = Config.Visuals.NightMode, __night_color = Color3.fromRGB(10, 10, 15),
     __original_lighting = { Ambient = game:GetService("Lighting").Ambient, Brightness = game:GetService("Lighting").Brightness, ClockTime = game:GetService("Lighting").ClockTime }
 }
 
@@ -1380,7 +1437,18 @@ function System.visuals.toggle_night_mode(state)
     else Lighting.Ambient = System.visuals.__original_lighting.Ambient; Lighting.Brightness = System.visuals.__original_lighting.Brightness; Lighting.ClockTime = System.visuals.__original_lighting.ClockTime end
 end
 
-System.player_mods = { __walkspeed_enabled = false, __walkspeed_value = 16, __jumppower_enabled = false, __jumppower_value = 50, __fov_enabled = false, __fov_value = 70, __spinbot_enabled = false, __spinbot_speed = 50, __cam_shake_disabled = false }
+System.player_mods = { 
+    __walkspeed_enabled = Config.PlayerMods.WalkSpeed.Enabled, 
+    __walkspeed_value = Config.PlayerMods.WalkSpeed.Value, 
+    __jumppower_enabled = Config.PlayerMods.JumpPower.Enabled, 
+    __jumppower_value = Config.PlayerMods.JumpPower.Value, 
+    __fov_enabled = Config.PlayerMods.FOV.Enabled, 
+    __fov_value = Config.PlayerMods.FOV.Value, 
+    __spinbot_enabled = Config.PlayerMods.Spinbot.Enabled, 
+    __spinbot_speed = Config.PlayerMods.Spinbot.Speed, 
+    __cam_shake_disabled = Config.PlayerMods.DisableCamShake 
+}
+
 function System.player_mods.update_movement()
     local humanoid = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
     if not humanoid then return end
@@ -1404,28 +1472,18 @@ RunService.RenderStepped:Connect(function()
     if System.player_mods.__walkspeed_enabled or System.player_mods.__jumppower_enabled then System.player_mods.update_movement() end
 end)
 
--- ============================================================================
 
 -- ============================================================================
--- ADD-ON FEATURE LOGIC
+-- MODULE ADD-ONS (TARGET PLAYER, AVATAR CHANGER, CURVE MATH, VISUAL FX)
 -- ============================================================================
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local Workspace = game:GetService("Workspace")
-local LocalPlayer = Players.LocalPlayer
-local Camera = Workspace.CurrentCamera
-
 local Features = {}
 
--- ============================================================================
--- ðŸŽ¯ 1. TARGET PLAYER MODULE
--- ============================================================================
+-- [[ 1. Target Player ]]
 Features.TargetPlayer = {
-    Enabled = false,
-    SelectedTarget = nil,
+    Enabled = (Config.Exclusive.TargetPlayerName ~= ""),
+    SelectedTarget = Config.Exclusive.TargetPlayerName,
     PlayerMap = {}
 }
-
 function Features.TargetPlayer.updatePlayerList()
     table.clear(Features.TargetPlayer.PlayerMap)
     for _, player in pairs(Players:GetPlayers()) do
@@ -1435,41 +1493,22 @@ function Features.TargetPlayer.updatePlayerList()
         end
     end
 end
-
-function Features.TargetPlayer.setTarget(playerName)
-    local actualName = Features.TargetPlayer.PlayerMap[playerName] or playerName
-    if actualName == "" or actualName == "None" then
-        Features.TargetPlayer.SelectedTarget = nil
-        getgenv().SelectedTarget = nil
-    else
-        Features.TargetPlayer.SelectedTarget = actualName
-        getgenv().SelectedTarget = actualName
-    end
-end
-
 function Features.TargetPlayer.getTargetPlayer()
     if not Features.TargetPlayer.Enabled or not Features.TargetPlayer.SelectedTarget then return nil end
     return Players:FindFirstChild(Features.TargetPlayer.SelectedTarget)
 end
-
 Players.PlayerAdded:Connect(function() task.wait(0.5); Features.TargetPlayer.updatePlayerList() end)
 Players.PlayerRemoving:Connect(function(player) 
-    if Features.TargetPlayer.SelectedTarget == player.Name then
-        Features.TargetPlayer.SelectedTarget = nil
-    end
+    if Features.TargetPlayer.SelectedTarget == player.Name then Features.TargetPlayer.SelectedTarget = nil end
     task.wait(0.5); Features.TargetPlayer.updatePlayerList() 
 end)
-
 Features.TargetPlayer.updatePlayerList()
 
--- ============================================================================
--- ðŸ”„ 2. BRUTAL AVATAR CHANGER
--- ============================================================================
-Features.AvatarChanger = {
-    Enabled = false,
-    _persistentTasks = {}
-}
 
+-- [[ 2. Brutal Avatar Changer ]]
+Features.AvatarChanger = {
+    Enabled = (Config.Exclusive.AvatarChangerName ~= "")
+}
 local function descriptions_match(a, b)
     if not a or not b then return false end
     local keys = {"Shirt", "Pants", "ShirtGraphic", "Head", "Face", "BodyTypeScale", "HeightScale"}
@@ -1478,7 +1517,6 @@ local function descriptions_match(a, b)
     end
     return true
 end
-
 local function force_apply_brutal(hum, desc)
     if not hum or not desc then return false end
     for _ = 1, 15 do
@@ -1487,11 +1525,8 @@ local function force_apply_brutal(hum, desc)
         local applied = pcall(function() return hum:GetAppliedDescription() end)
         if applied and descriptions_match(applied, desc) then return true end
     end
-    
-    -- Soft reset and retry
     pcall(function() hum.Description = Instance.new("HumanoidDescription") end)
     task.wait(0.1)
-    
     for _ = 1, 15 do
         pcall(function() hum:ApplyDescriptionClientServer(desc) end)
         task.wait(0.05)
@@ -1500,17 +1535,14 @@ local function force_apply_brutal(hum, desc)
     end
     return false
 end
-
 function Features.AvatarChanger.setAvatar(targetName)
     local char = LocalPlayer.Character
     local hum = char and char:FindFirstChildOfClass("Humanoid")
     if not hum or targetName == "" then return end
-
     local success, desc = pcall(function()
         local id = Players:GetUserIdFromNameAsync(targetName)
         return Players:GetHumanoidDescriptionFromUserId(id)
     end)
-
     if success and desc then
         pcall(function()
             LocalPlayer:ClearCharacterAppearance()
@@ -1521,104 +1553,59 @@ function Features.AvatarChanger.setAvatar(targetName)
     end
 end
 
--- ============================================================================
--- ðŸŒªï¸ 3. BALL CURVE MATH LOGIC
--- ============================================================================
-Features.Curve = {
-    Mode = 1 -- 1: Camera, 2: Random, 3: Accelerated, 4: Backwards, 5: Slow, 6: High
-}
 
+-- [[ 3. Ball Curve Math Logic ]]
+Features.Curve = { Mode = Config.Curve.Mode }
 function Features.Curve.get_cframe()
     local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
     if not root then return Camera.CFrame end
     
     local targetPart
     local targetedPlayer = Features.TargetPlayer.getTargetPlayer()
-    
     if targetedPlayer and targetedPlayer.Character and targetedPlayer.Character:FindFirstChild("HumanoidRootPart") then
         targetPart = targetedPlayer.Character.HumanoidRootPart
     end
     
-    -- If no target is locked, aim roughly where the camera is looking
     local target_pos = targetPart and targetPart.Position or (root.Position + Camera.CFrame.LookVector * 100)
     
     local curve_functions = {
-        function() return Camera.CFrame end, -- 1. Camera
-        
-        function() -- 2. Random
-            local random_offset = Vector3.new(math.random(-4000, 4000), math.random(-4000, 4000), math.random(-4000, 4000))
-            return CFrame.new(root.Position, target_pos + random_offset)
-        end,
-        
-        function() -- 3. Accelerated
-            return CFrame.new(root.Position, target_pos + Vector3.new(0, 5, 0))
-        end,
-        
-        function() -- 4. Backwards
+        function() return Camera.CFrame end,
+        function() return CFrame.new(root.Position, target_pos + Vector3.new(math.random(-4000, 4000), math.random(-4000, 4000), math.random(-4000, 4000))) end,
+        function() return CFrame.new(root.Position, target_pos + Vector3.new(0, 5, 0)) end,
+        function() 
             local direction = (root.Position - target_pos).Unit
             local backwards_pos = root.Position + direction * 10000 + Vector3.new(0, 1000, 0)
             return CFrame.new(Camera.CFrame.Position, backwards_pos)
         end,
-        
-        function() -- 5. Slow
-            return CFrame.new(root.Position, target_pos + Vector3.new(0, -9e18, 0))
-        end,
-        
-        function() -- 6. High
-            return CFrame.new(root.Position, target_pos + Vector3.new(0, 9e18, 0))
-        end
+        function() return CFrame.new(root.Position, target_pos + Vector3.new(0, -9e18, 0)) end,
+        function() return CFrame.new(root.Position, target_pos + Vector3.new(0, 9e18, 0)) end
     }
     
     local selected_function = curve_functions[Features.Curve.Mode] or curve_functions[1]
     return selected_function()
 end
 
--- ============================================================================
--- âœ¨ 4. VISUALS (RAIN & PLASMA TRAILS)
--- ============================================================================
+
+-- [[ 4. Visuals (Rain & Plasma Trails) ]]
 Features.Visuals = {
     Rain = {
-        Enabled = false,
-        Particles = {},
-        MaxParticles = 5000,
-        SpawnArea = 500,
-        FallSpeed = 25,
-        SpawnHeight = 100,
-        SpawnRate = 3,
-        Color = Color3.fromRGB(100, 200, 255)
+        Enabled = Config.Visuals.Rain, Particles = {}, MaxParticles = 5000,
+        SpawnArea = 500, FallSpeed = 25, SpawnHeight = 100, SpawnRate = 3,
+        Color = Config.Visuals.RainColor
     },
     Plasma = {
-        Enabled = false,
-        Active = false,
-        NumTrails = 8,
-        TrailColor = Color3.fromRGB(0, 255, 255),
-        Attachments = {},
-        LastBall = nil
+        Enabled = Config.Visuals.Plasma, Active = false, NumTrails = 8,
+        TrailColor = Config.Visuals.PlasmaColor, Attachments = {}, LastBall = nil
     }
 }
-
-local function get_ball()
-    local balls = Workspace:FindFirstChild('Balls')
-    if not balls then return nil end
-    for _, ball in pairs(balls:GetChildren()) do
-        if ball:GetAttribute('realBall') then
-            return ball
-        end
-    end
-    return nil
-end
-
--- [[ RAIN LOGIC ]]
 local ParticleFolder = Workspace:FindFirstChild("MagicalParticles") or Instance.new("Folder", Workspace)
 ParticleFolder.Name = "MagicalParticles"
 
 local function spawn_rain()
     local r = Features.Visuals.Rain
     if not r.Enabled or #r.Particles >= r.MaxParticles then return end
-    
     local char = LocalPlayer.Character
     local pos = char and char.PrimaryPart and char.PrimaryPart.Position or Camera.CFrame.Position
-    
     for _ = 1, r.SpawnRate do
         local particle = Instance.new("Part")
         particle.Size = Vector3.new(0.9, 0.9, 0.9)
@@ -1627,20 +1614,9 @@ local function spawn_rain()
         particle.Color = r.Color
         particle.CanCollide = false
         particle.Anchored = true
-        particle.Position = Vector3.new(
-            pos.X + math.random(-r.SpawnArea, r.SpawnArea),
-            pos.Y + r.SpawnHeight,
-            pos.Z + math.random(-r.SpawnArea, r.SpawnArea)
-        )
+        particle.Position = Vector3.new(pos.X + math.random(-r.SpawnArea, r.SpawnArea), pos.Y + r.SpawnHeight, pos.Z + math.random(-r.SpawnArea, r.SpawnArea))
         particle.Parent = ParticleFolder
-        
-        table.insert(r.Particles, {
-            Part = particle,
-            Velocity = Vector3.new(math.random(-2, 2), -r.FallSpeed, math.random(-2, 2)),
-            TimeAlive = 0,
-            FloatFreq = math.random(2, 4),
-            FloatAmp = math.random(2, 5)
-        })
+        table.insert(r.Particles, { Part = particle, Velocity = Vector3.new(math.random(-2, 2), -r.FallSpeed, math.random(-2, 2)), TimeAlive = 0, FloatFreq = math.random(2, 4), FloatAmp = math.random(2, 5) })
     end
 end
 
@@ -1648,109 +1624,59 @@ local function update_rain(delta)
     local r = Features.Visuals.Rain
     local char = LocalPlayer.Character
     local pos = char and char.PrimaryPart and char.PrimaryPart.Position or Camera.CFrame.Position
-    
     for i = #r.Particles, 1, -1 do
         local p = r.Particles[i]
-        if not p.Part or not p.Part.Parent then
-            table.remove(r.Particles, i)
-            continue
-        end
-        
+        if not p.Part or not p.Part.Parent then table.remove(r.Particles, i); continue end
         p.TimeAlive = p.TimeAlive + delta
         local float_x = math.sin(p.TimeAlive * p.FloatFreq) * p.FloatAmp * delta
         local float_z = math.cos(p.TimeAlive * p.FloatFreq) * p.FloatAmp * delta
-        
-        local new_pos = p.Part.Position + Vector3.new(
-            p.Velocity.X * delta + float_x,
-            p.Velocity.Y * delta,
-            p.Velocity.Z * delta + float_z
-        )
+        local new_pos = p.Part.Position + Vector3.new(p.Velocity.X * delta + float_x, p.Velocity.Y * delta, p.Velocity.Z * delta + float_z)
         p.Part.Position = new_pos
-        
-        if new_pos.Y < pos.Y - 20 or (new_pos - pos).Magnitude > r.SpawnArea * 1.5 then
-            p.Part:Destroy()
-            table.remove(r.Particles, i)
-        end
+        if new_pos.Y < pos.Y - 20 or (new_pos - pos).Magnitude > r.SpawnArea * 1.5 then p.Part:Destroy(); table.remove(r.Particles, i) end
     end
 end
 
--- [[ PLASMA TRAIL LOGIC ]]
 local function create_plasma(ball)
     local p = Features.Visuals.Plasma
     if p.Active then return end
     p.Active = true
     p.Attachments = {}
-    
     for i = 1, p.NumTrails do
         local angle = (i / p.NumTrails) * math.pi * 2
         local radius = math.random(150, 250) / 100
         local height = math.random(-150, 150) / 100
-        
-        local a0 = Instance.new("Attachment", ball)
-        local a1 = Instance.new("Attachment", ball)
-        
+        local a0 = Instance.new("Attachment", ball); local a1 = Instance.new("Attachment", ball)
         local trail = Instance.new("Trail", ball)
-        trail.Attachment0 = a0
-        trail.Attachment1 = a1
-        trail.Lifetime = 0.6
-        trail.FaceCamera = true
-        trail.LightEmission = 1
-        trail.Color = ColorSequence.new(p.TrailColor)
-        
-        table.insert(p.Attachments, {
-            a0 = a0, a1 = a1, trail = trail,
-            baseAngle = angle, angle = 0, speed = math.random(15, 30) / 10,
-            spiralSpeed = math.random(25, 45) / 10, baseRadius = radius, baseHeight = height
-        })
+        trail.Attachment0 = a0; trail.Attachment1 = a1; trail.Lifetime = 0.6; trail.FaceCamera = true; trail.LightEmission = 1; trail.Color = ColorSequence.new(p.TrailColor)
+        table.insert(p.Attachments, { a0 = a0, a1 = a1, trail = trail, baseAngle = angle, angle = 0, speed = math.random(15, 30) / 10, spiralSpeed = math.random(25, 45) / 10, baseRadius = radius, baseHeight = height })
     end
 end
 
 local function animate_plasma(delta)
     local p = Features.Visuals.Plasma
     if not p.Active then return end
-    local time = tick()
-    
     for _, t in ipairs(p.Attachments) do
         t.angle = t.angle + t.speed * delta
         local spiral = t.angle * t.spiralSpeed
-        
-        t.a0.Position = Vector3.new(
-            math.cos(t.baseAngle + t.angle) * t.baseRadius,
-            t.baseHeight + math.sin((t.baseAngle + t.angle) * 3) * 0.8,
-            math.sin(t.baseAngle + t.angle) * t.baseRadius
-        )
-        
-        t.a1.Position = Vector3.new(
-            math.cos(t.baseAngle + t.angle + math.pi) * t.baseRadius,
-            -t.baseHeight + math.cos((t.baseAngle + t.angle) * 2.5) * 0.8,
-            math.sin(t.baseAngle + t.angle + math.pi) * t.baseRadius
-        )
+        t.a0.Position = Vector3.new(math.cos(t.baseAngle + t.angle) * t.baseRadius, t.baseHeight + math.sin((t.baseAngle + t.angle) * 3) * 0.8, math.sin(t.baseAngle + t.angle) * t.baseRadius)
+        t.a1.Position = Vector3.new(math.cos(t.baseAngle + t.angle + math.pi) * t.baseRadius, -t.baseHeight + math.cos((t.baseAngle + t.angle) * 2.5) * 0.8, math.sin(t.baseAngle + t.angle + math.pi) * t.baseRadius)
     end
 end
 
 local function cleanup_plasma(ball)
     if not ball then return end
     for _, obj in pairs(ball:GetChildren()) do
-        if obj:IsA("Trail") or (obj:IsA("Attachment") and not obj.Name:match("Attachment")) then
-            obj:Destroy()
-        end
+        if obj:IsA("Trail") or (obj:IsA("Attachment") and not obj.Name:match("Attachment")) then obj:Destroy() end
     end
-    Features.Visuals.Plasma.Active = false
-    Features.Visuals.Plasma.Attachments = {}
+    Features.Visuals.Plasma.Active = false; Features.Visuals.Plasma.Attachments = {}
 end
 
--- [[ VISUALS RENDER LOOP ]]
 RunService.Heartbeat:Connect(function(delta)
-    -- Rain Loop
-    if Features.Visuals.Rain.Enabled then
-        spawn_rain()
-    end
+    if Features.Visuals.Rain.Enabled then spawn_rain() end
     update_rain(delta)
     
-    -- Plasma Loop
-    local ball = get_ball()
+    local ball = System.ball.get()
     local p = Features.Visuals.Plasma
-    
     if p.Enabled then
         if ball and ball ~= p.LastBall then
             if p.LastBall then cleanup_plasma(p.LastBall) end
@@ -1762,159 +1688,45 @@ RunService.Heartbeat:Connect(function(delta)
         end
         if ball and p.Active then animate_plasma(delta) end
     else
-        if p.LastBall then
-            cleanup_plasma(p.LastBall)
-            p.LastBall = nil
-        end
+        if p.LastBall then cleanup_plasma(p.LastBall); p.LastBall = nil end
     end
 end)
 
-
 -- ============================================================================
--- âš™ï¸ API / HOW TO USE (EXAMPLES)
+-- INITIALIZE MODULES ON START
 -- ============================================================================
 
--- [[ Target Player ]]
--- Features.TargetPlayer.Enabled = true
--- Features.TargetPlayer.setTarget("Player123") -- Set to nil to disable targeting
+-- Autoparry
+if Config.Autoparry.Enabled then System.autoparry.start() end
 
--- [[ Avatar Changer ]]
--- Features.AvatarChanger.setAvatar("Builderman")
+-- Spam 
+if Config.Spam.ManualSpam then System.manual_spam.start() end
+if Config.Spam.AutoSpam then System.auto_spam.start() end
 
--- [[ Curve ]]
--- Features.Curve.Mode = 2 -- Changes curve to 'Random'
--- local curve_cframe = Features.Curve.get_cframe() -- Call this when firing a remote spoof
+-- AI Play
+if Config.Misc.AIPlay then AutoPlayModule.runThread() end
+LocalPlayer.PlayerScripts.EffectScripts.ClientFX.Disabled = Config.Misc.DisableEffects
 
--- [[ Visuals ]]
--- Features.Visuals.Rain.Enabled = true
--- Features.Visuals.Rain.Color = Color3.fromRGB(255, 0, 0) -- Red Rain
+-- Exclusives
+WalkableSemiImmortal.toggle(Config.Exclusive.Immortal)
+System.visuals.toggle_night_mode(Config.Visuals.NightMode)
+System.player_mods.disable_camera_shake(Config.PlayerMods.DisableCamShake)
 
--- Features.Visuals.Plasma.Enabled = true
--- Features.Visuals.Plasma.TrailColor = Color3.fromRGB(0, 255, 0) -- Green Plasma
+if Config.Exclusive.Emotes then
+    animation_system.start()
+    if Config.Exclusive.SelectedEmote ~= "None" and Config.Exclusive.SelectedEmote ~= "" then
+        animation_system.play(Config.Exclusive.SelectedEmote)
+    end
+end
 
--- ============================================================================
--- LYRA UI WIRING (USES THE LOADSTRING LIBRARY ABOVE)
--- ============================================================================
-local main = Library.new()
+-- Target Player System Hook
+getgenv().SelectedTarget = Features.TargetPlayer.SelectedTarget
 
-local rage = main:create_tab('Autoparry', 'rbxassetid://76499042599127')
-local detectionstab = main:create_tab('Detection', 'rbxassetid://10734951847')
-local spamtab = main:create_tab('Spam', 'rbxassetid://10709781460')
-local playertab = main:create_tab('Player', 'rbxassetid://126017907477623')
-local visualstab = main:create_tab('Visuals', 'rbxassetid://10723346959')
-local misctab = main:create_tab('Misc', 'rbxassetid://132243429647479')
-local exclusivetab = main:create_tab('Exclusive', 'rbxassetid://10734966248')
+-- Avatar Changer Hook
+if Features.AvatarChanger.Enabled then
+    task.spawn(function()
+        Features.AvatarChanger.setAvatar(Config.Exclusive.AvatarChangerName)
+    end)
+end
 
-local autoparry = rage:create_module({ title = 'Auto Parry', flag = 'AutoParry_Module', section = 'left', callback = function(value)
-    System.__properties.__autoparry_enabled = value
-    if value then System.autoparry.start() else System.autoparry.stop() end
-end })
-autoparry:create_checkbox({ title = 'Enabled', flag = 'AutoParry_Enabled', callback = function(value)
-    System.__properties.__autoparry_enabled = value
-    if value then System.autoparry.start() else System.autoparry.stop() end
-end })
-autoparry:create_dropdown({ title = 'Parry Method', flag = 'AutoParry_Method', options = {'KeyPress (F)', 'MouseClick'}, maximum_options = 2, callback = function(value) getgenv().AutoParryMode = value end })
-autoparry:create_slider({ title = 'Accuracy Adjuster', flag = 'AutoParry_Accuracy', minimum_value = 1, maximum_value = 10, value = 1, round_number = true, callback = function(value) System.__properties.__accuracy = value; update_divisor() end })
-autoparry:create_checkbox({ title = 'Play Animation', flag = 'AutoParry_PlayAnimation', callback = function(value) System.__properties.__play_animation = value end })
-autoparry:create_checkbox({ title = 'Cooldown Protection', flag = 'AutoParry_CooldownProtection', callback = function(value) getgenv().CooldownProtection = value end })
-autoparry:create_checkbox({ title = 'Auto Ability', flag = 'AutoParry_AutoAbility', callback = function(value) getgenv().AutoAbility = value end })
-
-local targetModule = rage:create_module({ title = 'Target Player', flag = 'TargetPlayer_Module', section = 'right', callback = function(value) Features.TargetPlayer.Enabled = value end })
-targetModule:create_checkbox({ title = 'Enabled', flag = 'TargetPlayer_Enabled', callback = function(value) Features.TargetPlayer.Enabled = value end })
-targetModule:create_textbox({ title = 'Target Username', flag = 'TargetPlayer_Name', placeholder = 'Username or display name', callback = function(value) Features.TargetPlayer.updatePlayerList(); Features.TargetPlayer.setTarget(value) end })
-targetModule:create_dropdown({ title = 'AutoCurve', flag = 'AutoCurve_Mode', options = {'Camera', 'Random', 'Accelerated', 'Backwards', 'Slow', 'High'}, maximum_options = 6, callback = function(value)
-    local modes = {'Camera', 'Random', 'Accelerated', 'Backwards', 'Slow', 'High'}
-    Features.Curve.Mode = table.find(modes, value) or 1
-end })
-
-local triggerbot = rage:create_module({ title = 'Triggerbot', flag = 'Triggerbot_Module', section = 'right', callback = function(value) System.triggerbot.enable(value) end })
-triggerbot:create_checkbox({ title = 'Enabled', flag = 'Triggerbot_Enabled', callback = function(value) System.triggerbot.enable(value) end })
-triggerbot:create_checkbox({ title = 'Notify', flag = 'Triggerbot_Notify', callback = function(value) getgenv().TriggerbotNotify = value end })
-
-local detections = detectionstab:create_module({ title = 'Ability Detections', flag = 'Detections_Module', section = 'left', callback = function() end })
-detections:create_checkbox({ title = 'Infinity Detection', flag = 'Detect_Infinity', callback = function(value) System.__config.__detections.__infinity = value end })
-detections:create_checkbox({ title = 'Deathslash Detection', flag = 'Detect_Deathslash', callback = function(value) System.__config.__detections.__deathslash = value end })
-detections:create_checkbox({ title = 'Timehole Detection', flag = 'Detect_Timehole', callback = function(value) System.__config.__detections.__timehole = value end })
-detections:create_checkbox({ title = 'Slashes Of Fury Detection', flag = 'Detect_Slashes', callback = function(value) System.__config.__detections.__slashesoffury = value end })
-detections:create_checkbox({ title = 'Phantom Detection', flag = 'Detect_Phantom', callback = function(value) System.__config.__detections.__phantom = value end })
-
-local manualSpam = spamtab:create_module({ title = 'Manual Spam', flag = 'ManualSpam_Module', section = 'left', callback = function(value) if value then System.manual_spam.start() else System.manual_spam.stop() end end })
-manualSpam:create_checkbox({ title = 'Enabled', flag = 'ManualSpam_Enabled', callback = function(value) if value then System.manual_spam.start() else System.manual_spam.stop() end end })
-manualSpam:create_dropdown({ title = 'Mode', flag = 'ManualSpam_Mode', options = {'KeyPress (F)', 'MouseClick'}, maximum_options = 2, callback = function(value) getgenv().ManualSpamMode = value end })
-manualSpam:create_slider({ title = 'Spam Rate', flag = 'ManualSpam_Rate', minimum_value = 60, maximum_value = 5000, value = 240, round_number = true, callback = function(value) System.__properties.__spam_rate = value end })
-
-local autoSpam = spamtab:create_module({ title = 'Auto Spam', flag = 'AutoSpam_Module', section = 'right', callback = function(value) if value then System.auto_spam.start() else System.auto_spam.stop() end end })
-autoSpam:create_checkbox({ title = 'Enabled', flag = 'AutoSpam_Enabled', callback = function(value) if value then System.auto_spam.start() else System.auto_spam.stop() end end })
-autoSpam:create_slider({ title = 'Parry Threshold', flag = 'AutoSpam_Threshold', minimum_value = 1, maximum_value = 5, value = 2.5, round_number = false, callback = function(value) System.__properties.__spam_threshold = value end })
-autoSpam:create_slider({ title = 'Spam Rate', flag = 'AutoSpam_Rate', minimum_value = 60, maximum_value = 5000, value = 240, round_number = true, callback = function(value) System.__properties.__spam_rate = value end })
-
-local movement = playertab:create_module({ title = 'Movement', flag = 'Movement_Module', section = 'left', callback = function() end })
-movement:create_checkbox({ title = 'WalkSpeed Mod', flag = 'WalkSpeed_Enabled', callback = function(value) System.player_mods.__walkspeed_enabled = value end })
-movement:create_slider({ title = 'WalkSpeed Value', flag = 'WalkSpeed_Value', minimum_value = 16, maximum_value = 500, value = 36, round_number = true, callback = function(value) System.player_mods.__walkspeed_value = value end })
-movement:create_checkbox({ title = 'JumpPower Mod', flag = 'JumpPower_Enabled', callback = function(value) System.player_mods.__jumppower_enabled = value end })
-movement:create_slider({ title = 'JumpPower Value', flag = 'JumpPower_Value', minimum_value = 50, maximum_value = 200, value = 50, round_number = true, callback = function(value) System.player_mods.__jumppower_value = value end })
-
-local character = playertab:create_module({ title = 'Character / Camera', flag = 'Character_Module', section = 'right', callback = function() end })
-character:create_checkbox({ title = 'Disable Cam Shake', flag = 'DisableCamShake', callback = function(value) System.player_mods.disable_camera_shake(value) end })
-character:create_checkbox({ title = 'Field of View Mod', flag = 'FOV_Enabled', callback = function(value) System.player_mods.__fov_enabled = value end })
-character:create_slider({ title = 'FOV Amount', flag = 'FOV_Value', minimum_value = 70, maximum_value = 120, value = 70, round_number = true, callback = function(value) System.player_mods.__fov_value = value end })
-character:create_checkbox({ title = 'Spinbot', flag = 'Spinbot_Enabled', callback = function(value) System.player_mods.__spinbot_enabled = value end })
-character:create_slider({ title = 'Spin Speed', flag = 'Spinbot_Speed', minimum_value = 10, maximum_value = 100, value = 50, round_number = true, callback = function(value) System.player_mods.__spinbot_speed = value end })
-
-local avatar = playertab:create_module({ title = 'Avatar Changer', flag = 'AvatarChanger_Module', section = 'right', callback = function(value) Features.AvatarChanger.Enabled = value end })
-avatar:create_textbox({ title = 'Target Username', flag = 'AvatarChanger_Target', placeholder = 'Username', callback = function(value) if Features.AvatarChanger.Enabled then Features.AvatarChanger.setAvatar(value) end end })
-
-local esp = visualstab:create_module({ title = 'ESP / World', flag = 'Visuals_Module', section = 'left', callback = function() end })
-esp:create_checkbox({ title = 'Enable ESP', flag = 'ESP_Enabled', callback = function(value) System.visuals.__esp_enabled = value end })
-esp:create_checkbox({ title = 'Team Check', flag = 'ESP_TeamCheck', callback = function(value) System.visuals.__esp_team_check = value end })
-esp:create_checkbox({ title = 'Night Mode', flag = 'NightMode', callback = function(value) System.visuals.toggle_night_mode(value) end })
-
-local rain = visualstab:create_module({ title = 'Rain', flag = 'Rain_Module', section = 'right', callback = function(value) Features.Visuals.Rain.Enabled = value end })
-rain:create_checkbox({ title = 'Enabled', flag = 'Rain_Enabled', callback = function(value) Features.Visuals.Rain.Enabled = value end })
-rain:create_slider({ title = 'Max Particles', flag = 'Rain_MaxParticles', minimum_value = 100, maximum_value = 20000, value = 5000, round_number = true, callback = function(value) Features.Visuals.Rain.MaxParticles = value end })
-rain:create_slider({ title = 'Spawn Rate', flag = 'Rain_SpawnRate', minimum_value = 1, maximum_value = 25, value = 3, round_number = true, callback = function(value) Features.Visuals.Rain.SpawnRate = value end })
-rain:create_slider({ title = 'Fall Speed', flag = 'Rain_FallSpeed', minimum_value = 5, maximum_value = 150, value = 25, round_number = true, callback = function(value) Features.Visuals.Rain.FallSpeed = value end })
-
-local plasma = visualstab:create_module({ title = 'Ball Trail', flag = 'Plasma_Module', section = 'right', callback = function(value) Features.Visuals.Plasma.Enabled = value end })
-plasma:create_checkbox({ title = 'Enabled', flag = 'Plasma_Enabled', callback = function(value) Features.Visuals.Plasma.Enabled = value end })
-plasma:create_slider({ title = 'Number of Trails', flag = 'Plasma_Trails', minimum_value = 2, maximum_value = 16, value = 8, round_number = true, callback = function(value) Features.Visuals.Plasma.NumTrails = value end })
-
-local ai = misctab:create_module({ title = 'AI Play', flag = 'AIPlay_Module', section = 'left', callback = function(value) if value then AutoPlayModule.runThread() else AutoPlayModule.finishThread() end end })
-ai:create_checkbox({ title = 'Enabled', flag = 'AIPlay_Enabled', callback = function(value) if value then AutoPlayModule.runThread() else AutoPlayModule.finishThread() end end })
-ai:create_checkbox({ title = 'AI Enable Jumping', flag = 'AIPlay_Jumping', callback = function(value) AutoPlayModule.CONFIG.JUMPING_ENABLED = value end })
-ai:create_checkbox({ title = 'AI Auto Vote', flag = 'AIPlay_AutoVote', callback = function(value) getgenv().AutoVote = value end })
-ai:create_checkbox({ title = 'AI Avoid Players', flag = 'AIPlay_AvoidPlayers', callback = function(value) AutoPlayModule.CONFIG.PLAYER_DISTANCE_ENABLED = value end })
-ai:create_slider({ title = 'AI Update Frequency', flag = 'AIPlay_UpdateFrequency', minimum_value = 3, maximum_value = 20, value = AutoPlayModule.CONFIG.UPDATE_FREQUENCY, round_number = true, callback = function(value) AutoPlayModule.CONFIG.UPDATE_FREQUENCY = value end })
-ai:create_slider({ title = 'AI Distance From Ball', flag = 'AIPlay_DistanceBall', minimum_value = 5, maximum_value = 100, value = AutoPlayModule.CONFIG.DEFAULT_DISTANCE, round_number = true, callback = function(value) AutoPlayModule.CONFIG.DEFAULT_DISTANCE = value end })
-ai:create_slider({ title = 'AI Jump Chance', flag = 'AIPlay_JumpChance', minimum_value = 0, maximum_value = 100, value = AutoPlayModule.CONFIG.JUMP_PERCENTAGE, round_number = true, callback = function(value) AutoPlayModule.CONFIG.JUMP_PERCENTAGE = value end })
-ai:create_slider({ title = 'AI Double Jump Chance', flag = 'AIPlay_DoubleJumpChance', minimum_value = 0, maximum_value = 100, value = AutoPlayModule.CONFIG.DOUBLE_JUMP_PERCENTAGE, round_number = true, callback = function(value) AutoPlayModule.CONFIG.DOUBLE_JUMP_PERCENTAGE = value end })
-
-local misc = misctab:create_module({ title = 'Rendering', flag = 'Rendering_Module', section = 'right', callback = function() end })
-misc:create_checkbox({ title = 'Disable Effects Rendering', flag = 'DisableEffectsRendering', callback = function(value) pcall(function() LocalPlayer.PlayerScripts.EffectScripts.ClientFX.Disabled = value end) end })
-
-local immortal = exclusivetab:create_module({ title = 'Walkable Semi-Immortal', flag = 'Immortal_Module', section = 'left', callback = WalkableSemiImmortal.toggle })
-immortal:create_checkbox({ title = 'Enabled', flag = 'Immortal_Enabled', callback = WalkableSemiImmortal.toggle })
-immortal:create_checkbox({ title = 'Notify', flag = 'Immortal_Notify', callback = function(value) if WalkableSemiImmortal.setNotify then WalkableSemiImmortal.setNotify(value) end end })
-immortal:create_slider({ title = 'Immortal Radius', flag = 'Immortal_Radius', minimum_value = 0, maximum_value = 100, value = 25, round_number = true, callback = WalkableSemiImmortal.setRadius })
-immortal:create_slider({ title = 'Immortal Height', flag = 'Immortal_Height', minimum_value = 0, maximum_value = 60, value = 30, round_number = true, callback = WalkableSemiImmortal.setHeight })
-
-local emotes = exclusivetab:create_module({ title = 'Emotes', flag = 'Emotes_Module', section = 'right', callback = function(value) if value then animation_system.start() else animation_system.cleanup() end end })
-emotes:create_checkbox({ title = 'Enable Emote System', flag = 'Emotes_Enabled', callback = function(value) if value then animation_system.start() else animation_system.cleanup() end end })
-emotes:create_dropdown({ title = 'Select Emote', flag = 'Emotes_Selected', options = emotes_data, maximum_options = 10, callback = function(value) if value ~= 'None' then animation_system.play(value); animation_system.current = value end end })
-emotes:create_checkbox({ title = 'Auto Stop on Move', flag = 'Emotes_AutoStop', callback = function(value) getgenv().AutoStopEmote = value end })
-
-local skins = exclusivetab:create_module({ title = 'Skin Changer', flag = 'SkinChanger_Module', section = 'right', callback = function(value) getgenv().skinChangerEnabled = value; if value and getgenv().updateSword then getgenv().updateSword() end end })
-skins:create_checkbox({ title = 'Change Sword Model', flag = 'SkinChanger_ModelEnabled', callback = function(value) getgenv().changeSwordModel = value end })
-skins:create_textbox({ title = 'Sword Model Name', flag = 'SkinChanger_ModelName', placeholder = 'Model name', callback = function(value) getgenv().swordModel = value; if getgenv().updateSword then getgenv().updateSword() end end })
-skins:create_checkbox({ title = 'Change Sword Animation', flag = 'SkinChanger_AnimEnabled', callback = function(value) getgenv().changeSwordAnimation = value end })
-skins:create_textbox({ title = 'Sword Anim Name', flag = 'SkinChanger_AnimName', placeholder = 'Animation name', callback = function(value) getgenv().swordAnimations = value; if getgenv().updateSword then getgenv().updateSword() end end })
-skins:create_checkbox({ title = 'Change Sword FX', flag = 'SkinChanger_FXEnabled', callback = function(value) getgenv().changeSwordFX = value end })
-skins:create_textbox({ title = 'Sword FX Name', flag = 'SkinChanger_FXName', placeholder = 'FX name', callback = function(value) getgenv().swordFX = value; if getgenv().updateSword then getgenv().updateSword() end end })
-
-main:load()
-
-game:GetService('StarterGui'):SetCore('SendNotification', {
-    Title = 'Lyra',
-    Text = 'Main features loaded. Fill the UI loadstring before running.',
-    Duration = 8,
-})
+print("[System] Blade Ball Headless Modules Initialized Successfully.")
